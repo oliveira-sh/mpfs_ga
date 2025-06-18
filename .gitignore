@@ -1,0 +1,5 @@
+.ignore
+*.txt
+*.arff
+mpfs_ga
+*.o
