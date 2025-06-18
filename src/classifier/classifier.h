@@ -53,6 +53,7 @@ public:
     unsigned int minValue(const unsigned int& value1, const unsigned int& value2);
     int intersectionPT(const string& trueClass, const string& predictedClass);
     int numberOfLevels(const string& classId);
+    vector<string> splitClass(const string &classStr);
 
     long double applyClassifier(bool use_stdout);
 

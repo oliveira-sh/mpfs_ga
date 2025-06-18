@@ -20,7 +20,7 @@ int main() {
     long double result = nbayes_c(false, false,
                                   "train.arff",
                                   "test.arff",
-                                  "");
+                                  "out.txt");
 
     printf("Resultado: %.10Lf\n", result);
 

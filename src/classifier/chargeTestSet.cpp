@@ -64,7 +64,8 @@ void ChargeTestSet::printClassTestSet() {
 
 void ChargeTestSet::getTestSet() {
     string line;
-    int i, begin, end, exampleId = 0, attributeId = 0;
+    int i, end, exampleId = 0, attributeId = 0;
+    unsigned long begin;
 
     openTestFile();
 
