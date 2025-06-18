@@ -1,7 +1,7 @@
 CXX = g++
 CC = gcc
 CXXFLAGS = -Wall -O2 -std=c++11
-CFLAGS = -Wall -O2
+CFLAGS = -Wall -O2 -std=c99
 
 SRCDIR = src
 CLASSDIR = $(SRCDIR)/classifier
