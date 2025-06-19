@@ -3,3 +3,9 @@
 *.arff
 mpfs_ga
 *.o
+__pycache__
+
+
+# Added by cargo
+
+/target
