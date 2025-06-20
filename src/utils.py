@@ -24,12 +24,10 @@ def str2int(value: str) -> int:
     digits = [c for c in value if c.isdigit()]
     return int(''.join(digits)) if digits else 0
 
-
 def get_datasets_profile(training_file: str, test_file: str):
     """
     Reads ARFF-style files and returns (n_train, n_test, n_attributes).
     """
-    # Count training examples and capture the last data line
     n_train = 0
     last_line = None
     with open(training_file, 'r') as f:
@@ -42,13 +40,10 @@ def get_datasets_profile(training_file: str, test_file: str):
                 continue
             n_train += 1
             last_line = s
-
     if last_line is None:
         raise ValueError(f"No data instances found in training file: {training_file}")
 
     n_attributes = len(last_line.split(','))
-
-    # Count test examples
     n_test = 0
     with open(test_file, 'r') as f:
         for line in f:

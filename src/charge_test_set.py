@@ -33,8 +33,6 @@ class ChargeTestSet:
         ]
         # allocate a list for class labels
         self.class_test_set = [''] * self.number_of_test_examples
-
-        # file handle placeholder
         self._fin = None
 
     def open_test_file(self):
@@ -91,10 +89,8 @@ class ChargeTestSet:
             parts = line.split(',')
             # parse attribute values
             for attr_id, raw_val in enumerate(parts[:-1]):
-                self.insert_test_set(example_id, attr_id, str2int(raw_val))
+                self.test_set[example_id][attr_id] = str2int(raw_val)
             # parse class label
-            self.insert_class_test_set(example_id, parts[-1])
-
+            self.class_test_set[example_id] = parts[-1]
             example_id += 1
-
         self.close_test_file()

@@ -11,5 +11,9 @@
 #! The above copyright notice and this permission notice shall be included in all
 #! copies or substantial portions of the Software.
 
+# Resultado: 10.2801196628
+
+from classifier import nbayes
+
 if __name__ == "__main__":
-    print()
+    nbayes(False, True, "treino_bins4_final.arff", "teste_bins4_final.arff", "")

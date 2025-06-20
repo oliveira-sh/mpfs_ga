@@ -83,7 +83,7 @@ class Classifier:
             self._log_usefulness = lu
 
         # 4) Per-class, per-attribute, per-value log-likelihoods
-        smoothing_log = math.log10(1 / n_train)
+        smoothing_log = math.log10(1 / n_train) # Pre-calculate
         attr_idx = ctr.attribute_index
         num_attrs = self.number_of_attributes - 1
 
@@ -91,6 +91,18 @@ class Classifier:
         for cid in classes:
             freq_list = ctr.class_freq[cid]
             cfreq = ctr.get_class_frequency(cid)
+            if cfreq == 0:
+                # If class frequency is zero, all likelihoods for this class should be smoothing_log
+                class_attr_logs = []
+                for aid in range(num_attrs):
+                    start = attr_idx[aid]
+                    end = attr_idx[aid + 1]
+                    max_val = end - start
+                    logs = [smoothing_log] * (max_val + 1)
+                    class_attr_logs.append(logs)
+                alog[cid] = class_attr_logs
+                continue
+
             class_attr_logs = []
             for aid in range(num_attrs):
                 start = attr_idx[aid]
@@ -107,76 +119,89 @@ class Classifier:
         self._prepared = True
 
     def apply_classifier(self, use_stdout: bool) -> float:
-        self._prepare_log_probabilities()
-        if use_stdout:
-            self.open_result_file()
+            self._prepare_log_probabilities()
+            if use_stdout:
+                self.open_result_file()
 
-        # Local aliases for speed
-        cte = Classifier.auxCLCTE
-        test_set = cte.test_set
-        true_classes = cte.class_test_set
+            self._split_cache = {}
+            cte = Classifier.auxCLCTE
+            test_set = cte.test_set
+            true_classes = cte.class_test_set
 
-        classes = self._classes
-        lp = self._log_priors
-        lu = self._log_usefulness if self.usefulness else None
-        alog = self._attr_log
+            classes = self._classes
+            lp = self._log_priors
+            lu = self._log_usefulness if self.usefulness else None
+            alog = self._attr_log
 
-        n_train = self.number_of_training_examples
-        num_attrs = self.number_of_attributes - 1
+            n_train = self.number_of_training_examples
+            num_attrs = self.number_of_attributes - 1
 
-        numerator = sumP = sumT = sumMinPT = 0
+            # OPTIMIZATION: Calculate smoothing value once outside loop
+            smoothing_log = math.log10(1 / n_train) if n_train > 0 else float('-inf')
+            numerator = sumP = sumT = sumMinPT = 0
 
-        for ex_idx, feat in enumerate(test_set):
-            best_score = float('-inf')
-            best_class = ""
+            true_classes_split = [tc.split('.') for tc in true_classes]
+            for ex_idx, feat in enumerate(test_set):
+                best_score = float('-inf')
+                best_class = ""
 
-            for cid in classes:
-                score = lp[cid]
-                if self.usefulness and lu is not None:
-                    score += lu[cid]
-                calogs = alog[cid]
-                for aid in range(num_attrs):
-                    val = feat[aid]
-                    logs = calogs[aid]
-                    score += logs[val] if val < len(logs) else math.log10(1 / n_train)
-                if score > best_score:
-                    best_score = score
-                    best_class = cid
+                for cid in classes:
+                    score = lp[cid]
+                    if self.usefulness and lu is not None:
+                        score += lu[cid]
 
-            true_c = true_classes[ex_idx]
-            # hierarchical intersection
-            inter = 0
-            for a, b in zip(true_c.split('.'), best_class.split('.')):
-                if a == b:
-                    inter += 1
+                    calogs = alog.get(cid)
+                    if calogs is None:
+                        continue
+
+                    for aid in range(num_attrs):
+                        val = feat[aid]
+                        logs = calogs[aid]
+                        score += logs[val] if val < len(logs) else smoothing_log
+
+                    if score > best_score:
+                        best_score = score
+                        best_class = cid
+                if best_class in self._split_cache:
+                    best_class_parts = self._split_cache[best_class]
                 else:
-                    break
-            numerator += inter
+                    best_class_parts = best_class.split('.')
+                    self._split_cache[best_class] = best_class_parts
 
-            sizeP = best_class.count('.') + 1
-            sizeT = true_c.count('.') + 1
-            sumP += sizeP
-            sumT += sizeT
-            sumMinPT += min(sizeP, sizeT)
+                true_c_parts = true_classes_split[ex_idx]
+
+                inter = 0
+                for a, b in zip(true_c_parts, best_class_parts):
+                    if a == b:
+                        inter += 1
+                    else:
+                        break
+                numerator += inter
+
+                sizeP = len(best_class_parts)
+                sizeT = len(true_c_parts)
+                sumP += sizeP
+                sumT += sizeT
+                sumMinPT += min(sizeP, sizeT)
+
+                if use_stdout and self.fout is not None:
+                    self.fout.write(f"Example {ex_idx} ({'.'.join(true_c_parts)}) -> {best_class}\n")
+            hP_new = numerator / sumMinPT if sumMinPT > 0 else 0.0
+            hP = numerator / sumP if sumP > 0 else 0.0
+            hR = numerator / sumT if sumT > 0 else 0.0
+
+            if (hP + hR) == 0:
+                hF = 0.0
+            else:
+                hF = 100 * (2 * hP * hR) / (hP + hR)
+            result = hF
 
             if use_stdout and self.fout is not None:
-                self.fout.write(f"Example {ex_idx} ({true_c}) -> {best_class}\n")
-
-        # Compute harmonic metrics
-        hP_new = numerator / sumMinPT
-        hP = numerator / sumP
-        hR = numerator / sumT
-        hF = 100 * (2 * hP * hR) / (hP + hR)
-        result = hF
-
-        if use_stdout and self.fout is not None:
-            self.fout.write(f"hP = {hP_new * 100}\n")
-            self.fout.write(f"hR = {hR * 100}\n")
-            self.fout.write(f"hF = {hF}\n")
-            self.close_result_file()
-
-        return result
-
+                self.fout.write(f"hP = {hP_new * 100}\n")
+                self.fout.write(f"hR = {hR * 100}\n")
+                self.fout.write(f"hF = {hF}\n")
+                self.close_result_file()
+            return result
 
 def nbayes(
     mlnp: bool,
