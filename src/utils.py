@@ -11,22 +11,23 @@
 #! The above copyright notice and this permission notice shall be included in all
 #! copies or substantial portions of the Software.
 
+# utils.py
+
 def str2int(value: str) -> int:
     """
     Extracts all digit characters from a string and returns them as an integer.
     If no digits are found, returns 0.
+    Fast-path for pure-digit strings.
     """
+    if value.isdigit():
+        return int(value)
     digits = [c for c in value if c.isdigit()]
     return int(''.join(digits)) if digits else 0
 
+
 def get_datasets_profile(training_file: str, test_file: str):
     """
-    Reads ARFF-style files and returns a tuple:
-      (number_of_training_examples, number_of_test_examples, number_of_attributes)
-
-    It skips lines until it finds a line starting with '@data' (case-insensitive),
-    then counts non-empty, non-comment lines ('%' prefix) as examples.
-    The number of attributes is determined by splitting the last training instance line on commas.
+    Reads ARFF-style files and returns (n_train, n_test, n_attributes).
     """
     # Count training examples and capture the last data line
     n_train = 0
@@ -45,7 +46,6 @@ def get_datasets_profile(training_file: str, test_file: str):
     if last_line is None:
         raise ValueError(f"No data instances found in training file: {training_file}")
 
-    # Attributes = number of comma-separated fields in the last training line
     n_attributes = len(last_line.split(','))
 
     # Count test examples

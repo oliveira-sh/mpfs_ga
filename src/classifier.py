@@ -17,9 +17,8 @@ from utils import get_datasets_profile
 from charge_training_set import ChargeTrainingSet
 from charge_test_set import ChargeTestSet
 
-
 class Classifier:
-    # Static references to training and test sets
+    # Will be set by nbayes()
     auxCLCTR: ChargeTrainingSet
     auxCLCTE: ChargeTestSet
 
@@ -38,6 +37,13 @@ class Classifier:
         self.usefulness = usefulness
         self.fout = None
 
+        # Flags & storage for precomputed tables
+        self._prepared = False
+        self._classes = []
+        self._log_priors = {}
+        self._log_usefulness = {}
+        self._attr_log = {}
+
     def open_result_file(self):
         try:
             self.fout = open(self.result_file, 'w')
@@ -50,99 +56,123 @@ class Classifier:
             self.fout.close()
             self.fout = None
 
-    def compute_probability_attribute_class(
-        self,
-        exte: int,
-        attribute_id: int,
-        class_id: str
-    ) -> float:
-        freq = self.auxCLCTR.get_attribute_value_class_frequency(
-            attribute_id,
-            self.auxCLCTE.get_attribute_value_test_set(exte, attribute_id),
-            class_id,
-        )
-        class_freq = self.auxCLCTR.get_class_frequency(class_id)
-        return freq / class_freq
+    def _prepare_log_probabilities(self):
+        """Compute once: log-priors, log-usefulness, and log-likelihoods."""
+        if self._prepared:
+            return
 
-    def compute_probability_training_class(self, class_id: str) -> float:
-        return self.auxCLCTR.get_class_frequency(class_id) / self.number_of_training_examples
+        ctr = Classifier.auxCLCTR
+        n_train = self.number_of_training_examples
 
-    @staticmethod
-    def split_class(class_str: str) -> list[str]:
-        return class_str.split('.')
+        # 1) Classes to evaluate
+        classes = list(ctr.classes_for_probability_evaluation.keys())
+        self._classes = classes
 
-    @staticmethod
-    def intersection_pt(true_class: str, predicted_class: str) -> int:
-        t = Classifier.split_class(true_class)
-        p = Classifier.split_class(predicted_class)
-        count = 0
-        for a, b in zip(t, p):
-            if a == b:
-                count += 1
-            else:
-                break
-        return count
+        # 2) Log-priors
+        lp = {}
+        for cid in classes:
+            freq = ctr.get_class_frequency(cid)
+            lp[cid] = math.log10(freq / n_train) if freq > 0 else float('-inf')
+        self._log_priors = lp
+
+        # 3) Log-usefulness (if enabled)
+        if self.usefulness:
+            lu = {}
+            for cid, uval in ctr.classes_for_probability_evaluation.items():
+                lu[cid] = math.log10(uval) if uval > 0 else float('-inf')
+            self._log_usefulness = lu
+
+        # 4) Per-class, per-attribute, per-value log-likelihoods
+        smoothing_log = math.log10(1 / n_train)
+        attr_idx = ctr.attribute_index
+        num_attrs = self.number_of_attributes - 1
+
+        alog = {}
+        for cid in classes:
+            freq_list = ctr.class_freq[cid]
+            cfreq = ctr.get_class_frequency(cid)
+            class_attr_logs = []
+            for aid in range(num_attrs):
+                start = attr_idx[aid]
+                end = attr_idx[aid + 1]
+                max_val = end - start
+                logs = [0.0] * (max_val + 1)
+                for v in range(max_val + 1):
+                    f = freq_list[start + v]
+                    logs[v] = math.log10(f / cfreq) if f > 0 else smoothing_log
+                class_attr_logs.append(logs)
+            alog[cid] = class_attr_logs
+
+        self._attr_log = alog
+        self._prepared = True
 
     def apply_classifier(self, use_stdout: bool) -> float:
-        numerator = 0
-        sumP = 0
-        sumT = 0
-        sumMinPT = 0
-
+        self._prepare_log_probabilities()
         if use_stdout:
             self.open_result_file()
 
-        for exte in range(self.number_of_test_examples):
-            bestP = float('-inf')
-            best_class: str = ""
+        # Local aliases for speed
+        cte = Classifier.auxCLCTE
+        test_set = cte.test_set
+        true_classes = cte.class_test_set
 
-            # Evaluate each candidate class
-            for class_id, usefulness_value in self.auxCLCTR.classes_for_probability_evaluation.items():
-                p_log = 0.0
-                # Attribute probabilities
-                for attr_id in range(self.number_of_attributes - 1):
-                    temp = self.compute_probability_attribute_class(exte, attr_id, class_id)
-                    if temp == 0.0:
-                        temp = 1.0 / self.number_of_training_examples
-                    p_log += math.log10(temp)
-                # Prior probability
-                p_log += math.log10(self.compute_probability_training_class(class_id))
+        classes = self._classes
+        lp = self._log_priors
+        lu = self._log_usefulness if self.usefulness else None
+        alog = self._attr_log
 
-                # Convert back from log and apply usefulness if required
-                if self.usefulness:
-                    p_val = math.pow(10, p_log) * usefulness_value
+        n_train = self.number_of_training_examples
+        num_attrs = self.number_of_attributes - 1
+
+        numerator = sumP = sumT = sumMinPT = 0
+
+        for ex_idx, feat in enumerate(test_set):
+            best_score = float('-inf')
+            best_class = ""
+
+            for cid in classes:
+                score = lp[cid]
+                if self.usefulness and lu is not None:
+                    score += lu[cid]
+                calogs = alog[cid]
+                for aid in range(num_attrs):
+                    val = feat[aid]
+                    logs = calogs[aid]
+                    score += logs[val] if val < len(logs) else math.log10(1 / n_train)
+                if score > best_score:
+                    best_score = score
+                    best_class = cid
+
+            true_c = true_classes[ex_idx]
+            # hierarchical intersection
+            inter = 0
+            for a, b in zip(true_c.split('.'), best_class.split('.')):
+                if a == b:
+                    inter += 1
                 else:
-                    p_val = math.pow(10, p_log)
+                    break
+            numerator += inter
 
-                if p_val > bestP:
-                    bestP = p_val
-                    best_class = class_id
-
-            true_class = self.auxCLCTE.get_class_test_set(exte)
-            intersection = self.intersection_pt(true_class, best_class)
-            numerator += intersection
-
-            pred_segments = Classifier.split_class(best_class)
-            true_segments = Classifier.split_class(true_class)
-            sizeP = len(pred_segments)
-            sizeT = len(true_segments)
+            sizeP = best_class.count('.') + 1
+            sizeT = true_c.count('.') + 1
             sumP += sizeP
             sumT += sizeT
             sumMinPT += min(sizeP, sizeT)
 
             if use_stdout and self.fout is not None:
-                self.fout.write(f"Example {exte} ({true_class}) -> {best_class}\n")
+                self.fout.write(f"Example {ex_idx} ({true_c}) -> {best_class}\n")
 
-        # Harmonic metrics
+        # Compute harmonic metrics
         hP_new = numerator / sumMinPT
         hP = numerator / sumP
         hR = numerator / sumT
-        result = 100 * (2 * hP * hR) / (hP + hR)
+        hF = 100 * (2 * hP * hR) / (hP + hR)
+        result = hF
 
         if use_stdout and self.fout is not None:
             self.fout.write(f"hP = {hP_new * 100}\n")
             self.fout.write(f"hR = {hR * 100}\n")
-            self.fout.write(f"hF = {100 * (2 * hP_new * hR) / (hP_new + hR)}\n")
+            self.fout.write(f"hF = {hF}\n")
             self.close_result_file()
 
         return result
@@ -153,22 +183,18 @@ def nbayes(
     usf: bool,
     training_file: str,
     test_file: str,
-    save: bool,
+    result_file: str,
 ) -> float:
-    # Retrieve dataset profiles
+    # 1) Profile datasets
     n_train, n_test, n_attr = get_datasets_profile(training_file, test_file)
-
-    # Prepare training and test sets
+    # 2) Load and index training
     ctr = ChargeTrainingSet(training_file, n_attr, n_train, mlnp)
     ctr.get_training_set()
+    # 3) Load test set
     cte = ChargeTestSet(test_file, n_test, n_attr)
     cte.get_test_set()
-
-    # Initialize classifier
-    result_file = 'out.txt' if save else ''
-
+    # 4) Classifier
     cl = Classifier(n_train, n_test, n_attr, result_file, usf)
     Classifier.auxCLCTR = ctr
     Classifier.auxCLCTE = cte
-
-    return cl.apply_classifier(save)
+    return cl.apply_classifier(bool(result_file))

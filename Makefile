@@ -3,7 +3,7 @@ CC = gcc
 CXXFLAGS = -Wall -O2 -std=c++11
 CFLAGS = -Wall -O2 -std=c99
 
-SRCDIR = src
+SRCDIR = src/original_classifier
 CLASSDIR = $(SRCDIR)/classifier
 OBJDIR = obj
 TARGET = bin/mpfs_ga
