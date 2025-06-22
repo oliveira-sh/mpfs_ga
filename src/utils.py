@@ -11,8 +11,6 @@
 #! The above copyright notice and this permission notice shall be included in all
 #! copies or substantial portions of the Software.
 
-# utils.py
-
 def str2int(value: str) -> int:
     """
     Extracts all digit characters from a string and returns them as an integer.

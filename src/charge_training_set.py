@@ -13,13 +13,13 @@
 
 import sys
 import math
-from typing import Dict, List
 from utils import str2int
+from typing import Dict, List, Optional
 
 class ChargeTrainingSet:
     def __init__(
         self,
-        training_file: str,
+        training_file: Optional[str],
         number_of_attributes: int,
         number_of_training_examples: int,
         mandatory_leaf_node_prediction: bool,
@@ -43,7 +43,7 @@ class ChargeTrainingSet:
 
     def open_training_file(self):
         try:
-            self._fin = open(self.training_file, 'r')
+            self._fin = open(str(self.training_file), 'r')
         except IOError:
             sys.stderr.write(f"[ERR] Error opening training file {self.training_file}\n")
             sys.exit(1)

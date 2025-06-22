@@ -11,11 +11,14 @@
 #! The above copyright notice and this permission notice shall be included in all
 #! copies or substantial portions of the Software.
 
+from typing import Optional
 from utils import str2int
 import sys
 
 class ChargeTestSet:
-    def __init__(self, test_file: str, number_of_test_examples: int, number_of_attributes: int):
+    def __init__(self, test_file: Optional[str],
+        number_of_test_examples: int,
+        number_of_attributes: int):
         """
         Initializes the test set container.
         :param test_file: Path to the ARFF-style test file.
@@ -38,7 +41,7 @@ class ChargeTestSet:
     def open_test_file(self):
         """Opens the test file, exits on failure."""
         try:
-            self._fin = open(self.test_file, 'r')
+            self._fin = open(str(self.test_file), 'r')
         except IOError:
             sys.stderr.write(f"[ERR] Error opening test file {self.test_file}\n")
             sys.exit(1)
