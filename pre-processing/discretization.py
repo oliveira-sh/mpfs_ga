@@ -86,6 +86,16 @@ def df_to_arff(df, relation, types, output_file):
         'attributes': attributes,
         'data': df.values.tolist()
     }
+
+    for att in arff_dict['attributes']:
+        if att[0] != "class":
+            attr_vec = att[1]
+            for i in range(len(attr_vec)):
+                attr_vec[i] = str(int(float(attr_vec[i])))
+    for data_arr in arff_dict['data']:
+        for num in range(len(data_arr)- 1):
+            data_arr[num] = str(int(float(data_arr[num])))
+
     with open(output_file, 'w') as f:
         dump(arff_dict, f)
 

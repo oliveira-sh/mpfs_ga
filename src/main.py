@@ -130,8 +130,8 @@ def fitness_in_memory(mask):
 def main():
     p = ArgumentParser()
     p.add_argument('--train', required=True, help="ARFF used for 5-fold CV")
-    p.add_argument('--pop',   type=int,   default=20)
-    p.add_argument('--gen',   type=int,   default=40)
+    p.add_argument('--pop',   type=int,   default=200)
+    p.add_argument('--gen',   type=int,   default=400)
     p.add_argument('--cxpb',  type=float, default=0.7)
     p.add_argument('--mutpb', type=float, default=0.2)
     p.add_argument('--mlnp',  action='store_false', help="flag mandatory leaf nodes")
@@ -158,7 +158,7 @@ def main():
     best_mask, best_score = [], -1.0
 
     chunksize = max(1, args.pop // (cpu_count() * 4))
-    print("gen\tmax\tavg")
+    print("gen\tmax\tavg\tdataset")
     with Pool(initializer=init_worker,
               initargs=(header, names, recs, folds, args.mlnp, args.usf)) as pool:
         for gen in range(1, args.gen + 1):
@@ -170,7 +170,7 @@ def main():
                 best_score = scores[i_best]
                 best_mask  = pop[i_best].copy()
 
-            print(f"{gen:2d}\t{max(scores):.4f}\t{sum(scores)/len(scores):.4f}")
+            print(f"{gen:2d}\t{max(scores):.4f}\t{sum(scores)/len(scores):.4f}\t{args.train.split('/')[-1]}")
             pop = evolve_population(pop, scores, args.cxpb, args.mutpb)
 
     os.makedirs(args.out, exist_ok=True)

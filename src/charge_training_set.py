@@ -265,7 +265,7 @@ class ChargeTrainingSet:
                     update_counter_func(idx)
                 else:
                     sys.stderr.write(
-                        f"[ERR] Inconsistent Attribute Value for AttributeId: {attribute_id}\n"
+                        f"[ERR] Inconsistent Attribute Value for AttributeId,RawVal: {attribute_id},{raw_val}\n"
                     )
                     sys.exit(1)
 
