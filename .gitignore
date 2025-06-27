@@ -5,6 +5,8 @@ mpfs_ga
 *.o
 __pycache__
 
+pypy/
+
 
 # Added by cargo
 

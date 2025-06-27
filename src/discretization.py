@@ -52,7 +52,12 @@ def discretize_df(df, exclude_cols=None, max_bins=20):
             bins = min(max_bins, unique)
             for b in range(bins, 1, -1):
                 try:
-                    est = KBinsDiscretizer(n_bins=b, encode='ordinal', strategy='quantile')
+                    est = KBinsDiscretizer(
+                        n_bins=b,
+                        encode='ordinal',
+                        strategy='quantile',
+                        quantile_method='averaged_inverted_cdf'
+                    )
                     df[col] = est.fit_transform(df[[col]]).astype(int).flatten()
                     break
                 except Exception:

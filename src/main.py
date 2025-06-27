@@ -130,8 +130,8 @@ def fitness_in_memory(mask):
 def main():
     p = ArgumentParser()
     p.add_argument('--train', required=True, help="ARFF used for 5-fold CV")
-    p.add_argument('--pop',   type=int,   default=200)
-    p.add_argument('--gen',   type=int,   default=400)
+    p.add_argument('--pop',   type=int,   default=20)
+    p.add_argument('--gen',   type=int,   default=40)
     p.add_argument('--cxpb',  type=float, default=0.7)
     p.add_argument('--mutpb', type=float, default=0.2)
     p.add_argument('--mlnp',  action='store_false', help="flag mandatory leaf nodes")
